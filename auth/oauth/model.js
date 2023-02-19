@@ -1,5 +1,6 @@
 // See https://oauth2-server.readthedocs.io/en/latest/model/spec.html for what you can do with this
 const crypto = require('crypto')
+const prisma = require('../../lib/prisma')
 const db = { // Here is a fast overview of what your db model should look like
   authorizationCode: {
     authorizationCode: '', // A string that contains the code
@@ -22,10 +23,11 @@ const db = { // Here is a fast overview of what your db model should look like
   },
 }
 
+
 const DebugControl = require('../utilities/debug.js')
 
 module.exports = {
-  getClient: function (clientId, clientSecret) {
+  getClient: async function (clientId, clientSecret) {
     // query db for details with client
     log({
       title: 'Get Client',
@@ -34,27 +36,17 @@ module.exports = {
         { name: 'clientSecret', value: clientSecret },
       ]
     })
-    db.client = { // Retrieved from the database
-      clientId: clientId,
-      clientSecret: clientSecret,
-      grants: ['authorization_code', 'refresh_token'],
-      redirectUris: ['http://localhost:3030/client/app'],
-    }
-    return new Promise(resolve => {
-      resolve(db.client)
-    })
+
+    return prisma.client.findFirst(
+      {
+        where: {
+          clientId: clientId,
+          clientSecret: "clientSecret",
+        }
+      }
+    )
   },
-  // generateAccessToken: (client, user, scope) => { // generates access tokens
-  //   log({
-  //     title: 'Generate Access Token',
-  //     parameters: [
-  //       {name: 'client', value: client},
-  //       {name: 'user', value: user},
-  //     ],
-  //   })
-  //
-  // },
-  saveToken: (token, client, user) => {
+  saveToken: async (token, client, user) => {
     /* This is where you insert the token into the database */
     log({
       title: 'Save Token',
@@ -64,29 +56,52 @@ module.exports = {
         { name: 'user', value: user },
       ],
     })
-    db.token = {
-      accessToken: token.accessToken,
-      accessTokenExpiresAt: token.accessTokenExpiresAt,
-      refreshToken: token.refreshToken, // NOTE this is only needed if you need refresh tokens down the line
-      refreshTokenExpiresAt: token.refreshTokenExpiresAt,
-      client: client,
-      user: user,
-    }
-    return new Promise(resolve => resolve(db.token))
 
+    const savedToken = await prisma.token.create({
+      data: {
+        accessToken: token.accessToken,
+        accessTokenExpiresAt: token.accessTokenExpiresAt,
+        refreshToken: token.accessToken, // NOTE this is only needed if you need refresh tokens down the line
+        refreshTokenExpiresAt: token.accessTokenExpiresAt,
+        clientId: client.clientId,
+        userId: user.user,
+      }
+    })
+
+
+    return new Promise(resolve => resolve({ ...savedToken, client, user }))
   },
-  getAccessToken: token => {
+  getAccessToken: async accessToken => {
     /* This is where you select the token from the database where the code matches */
     log({
       title: 'Get Access Token',
       parameters: [
-        { name: 'token', value: token },
+        { name: 'accessToken', value: accessToken },
       ]
     })
-    if (!token || token === 'undefined') return false
-    return new Promise(resolve => resolve(db.token))
+    if (!accessToken || accessToken === 'undefined') return false
+    const foundAccessToken = await prisma.token.findFirst({
+      where: {
+        accessToken: accessToken
+      },
+      select: {
+        accessToken: true,
+        accessTokenExpiresAt: true,
+        refreshToken: true,
+        refreshTokenExpiresAt: true,
+        client: true,
+        user: true
+      }
+    })
+
+    const res = foundAccessToken
+    res["client"]["id"] = foundAccessToken.clientId
+    res["user"] = { user: foundAccessToken.user.id }
+
+    return new Promise(resolve => resolve(foundAccessToken))
+
   },
-  getRefreshToken: token => {
+  getRefreshToken: async token => {
     /* Retrieves the token from the database */
     log({
       title: 'Get Refresh Token',
@@ -94,10 +109,28 @@ module.exports = {
         { name: 'token', value: token },
       ],
     })
-    DebugControl.log.variable({ name: 'db.token', value: db.token })
-    return new Promise(resolve => resolve(db.token))
+    // DebugControl.log.variable({ name: 'db.token', value: db.token })
+    const foundRefreshToken = await prisma.token.findFirst({
+      where: {
+        refreshToken: token
+      },
+      select: {
+        accessToken: true,
+        accessTokenExpiresAt: true,
+        refreshToken: true,
+        refreshTokenExpiresAt: true,
+        client: true,
+        user: true
+      }
+    })
+
+    const res = foundRefreshToken
+    res["client"]["id"] = foundRefreshToken.clientId
+
+    return new Promise(resolve => resolve(foundRefreshToken))
   },
   revokeToken: token => {
+    // TODO: Implement this
     /* Delete the token from the database */
     log({
       title: 'Revoke Token',
@@ -105,27 +138,15 @@ module.exports = {
         { name: 'token', value: token },
       ]
     })
-    if (!token || token === 'undefined') return false
-    return new Promise(resolve => resolve(true))
-  },
-  generateAuthorizationCode: (client, user, scope) => {
-    /* 
-    For this to work, you are going have to hack this a little bit:
-    1. navigate to the node_modules folder
-    2. find the oauth_server folder. (node_modules/express-oauth-server/node_modules/oauth2-server)
-    3. open lib/handlers/authorize-handler.js
-    4. Make the following change (around line 136):
+    if (!token || token === 'undefined') return new Promise(resolve => resolve(false))
 
-    AuthorizeHandler.prototype.generateAuthorizationCode = function (client, user, scope) {
-      if (this.model.generateAuthorizationCode) {
-        // Replace this
-        //return promisify(this.model.generateAuthorizationCode).call(this.model, client, user, scope);
-        // With this
-        return this.model.generateAuthorizationCode(client, user, scope)
-      }
-      return tokenUtil.generateRandomToken();
-    };
-    */
+    return prisma.token.delete({ where: { refreshToken: token.refreshToken } })
+      .then(function (token) {
+        return !!token;
+      });
+  },
+  generateAuthorizationCode: (client, user, scope, callback) => {
+    /* generate authroization code */
 
     log({
       title: 'Generate Authorization Code',
@@ -135,14 +156,15 @@ module.exports = {
       ],
     })
 
+    const err = null;
     const seed = crypto.randomBytes(256)
     const code = crypto
       .createHash('sha1')
       .update(seed)
       .digest('hex')
-    return code
+    return callback(err, code);
   },
-  saveAuthorizationCode: (code, client, user) => {
+  saveAuthorizationCode: async (code, client, user) => {
     /* This is where you store the access code data into the database */
     log({
       title: 'Save Authorization Code',
@@ -152,17 +174,18 @@ module.exports = {
         { name: 'user', value: user },
       ],
     })
-    db.authorizationCode = {
-      authorizationCode: code.authorizationCode,
-      expiresAt: code.expiresAt,
-      client: client,
-      user: user,
-    }
-    return new Promise(resolve => resolve(Object.assign({
-      redirectUri: `${code.redirectUri}`,
-    }, db.authorizationCode)))
+
+    return prisma.authCode.create({
+      data: {
+        authorizationCode: code.authorizationCode,
+        expiresAt: code.expiresAt,
+        clientId: client.clientId,
+        userId: user.user,
+        redirectUri: code.redirectUri
+      }
+    })
   },
-  getAuthorizationCode: authorizationCode => {
+  getAuthorizationCode: async (authorizationCode) => {
     /* this is where we fetch the stored data from the code */
     log({
       title: 'Get Authorization code',
@@ -170,27 +193,69 @@ module.exports = {
         { name: 'authorizationCode', value: authorizationCode },
       ],
     })
-    return new Promise(resolve => {
-      resolve(db.authorizationCode)
+
+    // correct code
+    // {
+    //   authorizationCode: 'df5f329adfd0a3b94099606e27e9c00c3b3b4a74',
+    //   expiresAt: 2023-02-18T20:42:50.737Z,
+    //   client: {
+    //     clientId: 'myClientId',
+    //     clientSecret: null,
+    //     grants: [ 'authorization_code', 'refresh_token' ],
+    //     redirectUris: [ 'http://localhost:3030/client/app' ]
+    //   },
+    //   user: { user: 1 }
+    // }
+
+
+    const authCode = await prisma.authCode.findFirst({
+      where: {
+        authorizationCode: authorizationCode
+      },
+      select: {
+        authorizationCode: true,
+        expiresAt: true,
+        // redirectUri: true,
+        clientId: true,
+        client: true,
+        user: true
+      }
     })
+
+    console.log("has authCode", !!authCode)
+
+    const res = authCode
+    res["client"]["redirectUri"] = [authCode.client.redirectUris]
+    res["user"] = { user: authCode.user.id }
+
+
+    return new Promise(resolve => resolve(res))
   },
-  revokeAuthorizationCode: authorizationCode => {
+  revokeAuthorizationCode: async code => {
     /* This is where we delete codes */
     log({
       title: 'Revoke Authorization Code',
       parameters: [
-        { name: 'authorizationCode', value: authorizationCode },
+        { name: 'authorizationCode', value: code },
       ],
     })
-    db.authorizationCode = { // DB Delete in this in memory example :)
-      authorizationCode: '', // A string that contains the code
-      expiresAt: new Date(), // A date when the code expires
-      redirectUri: '', // A string of where to redirect to with this code
-      client: null, // See the client section
-      user: null, // Whatever you want... This is where you can be flexible with the protocol
-    }
-    const codeWasFoundAndDeleted = true  // Return true if code found and deleted, false otherwise
-    return new Promise(resolve => resolve(codeWasFoundAndDeleted))
+
+
+    return prisma.authCode.delete({ where: { authorizationCode: code.authorizationCode } })
+      .then(function (authorizationCode) {
+        return !!authorizationCode;
+      });
+
+
+    // await prisma.authCode.delete({
+    //   where: {
+    //     authorizationCode: code.authorizationCode
+    //   }
+    // })
+
+
+    // const codeWasFoundAndDeleted = true  // Return true if code found and deleted, false otherwise
+    // return new Promise(resolve => resolve(codeWasFoundAndDeleted))
   },
   verifyScope: (token, scope) => {
     /* This is where we check to make sure the client has access to this scope */

@@ -15,11 +15,11 @@ app.use(DebugControl.log.request())
 app.use('/client', require('./routes/client.js')) // Client routes
 app.use('/oauth', require('./routes/auth.js')) // routes to access the auth stuff
 // Note that the next router uses middleware. That protects all routes within this middleware
-app.use('/secure', (req,res,next) => {
+app.use('/secure', (req, res, next) => {
   DebugControl.log.flow('Authentication')
   return next()
-},oauthServer.authenticate(), require('./routes/secure.js')) // routes to access the protected stuff
-app.use('/', (req,res) => res.redirect('/client'))
+}, oauthServer.authenticate(), require('./routes/secure.js')) // routes to access the protected stuff
+app.use('/', (req, res) => res.redirect('/client'))
 
 
 app.listen(port)

@@ -4,7 +4,7 @@ let chaiHttp = require('chai-http')
 
 chai.use(chaiHttp)
 
-const {server} = require('../setup.js')
+const { server } = require('../setup.js')
 
 let validData = {
   code: '',
@@ -17,8 +17,8 @@ let validData = {
 }
 
 const userTypes = [
-  {valid: true, type:'valid', username: 'username', password: 'password'},
-  {valid: false, type:'invalid', username: 'user', password: 'pass'},
+  { valid: true, type: 'valid', email: 'sunnyashiin@gmail.com', password: 'password' },
+  { valid: false, type: 'invalid', email: 'user', password: 'pass' },
 ]
 
 describe('/oauth', () => {
@@ -43,7 +43,7 @@ describe('/oauth', () => {
               response_type: 'code',
               redirect_uri: 'http://localhost:3030/client/app',
               state: 'test_state',
-              username: user.username,
+              email: user.email,
               password: user.password,
             })
             .then(res => {
@@ -52,7 +52,7 @@ describe('/oauth', () => {
               res.redirects.length.should.equal(1)
               const newLocation = res.redirects[0]
 
-              if(user.valid) {
+              if (user.valid) {
                 const beginning = 'http://localhost:3030/client/app?code='
                 newLocation.should.include(beginning)
                 const expectedState = 'state=test_state'
@@ -156,7 +156,7 @@ describe('/secure Routes', () => {
         .set('Authorization', validData.tokenFrom.code)
         .then(res => {
           res.should.have.status(200) // Unauthorized
-          res.body.should.deep.equal({success: true})
+          res.body.should.deep.equal({ success: true })
         })
     })
 
@@ -166,7 +166,7 @@ describe('/secure Routes', () => {
         .set('Authorization', validData.tokenFrom.refresh)
         .then(res => {
           res.should.have.status(200) // Unauthorized
-          res.body.should.deep.equal({success: true})
+          res.body.should.deep.equal({ success: true })
         })
     })
 
@@ -176,7 +176,7 @@ describe('/secure Routes', () => {
         .set('Authorization', validData.tokenFrom.refreshedRefresh)
         .then(res => {
           res.should.have.status(200) // Unauthorized
-          res.body.should.deep.equal({success: true})
+          res.body.should.deep.equal({ success: true })
         })
     })
 
