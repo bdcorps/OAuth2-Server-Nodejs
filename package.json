@@ -6,7 +6,7 @@
   "scripts": {
     "test": "npx mocha auth/tests/**/*.js --exit",
     "test-dev": "nodemon --exec 'yarn test || exit 1'",
-    "authServer": "node auth/app.js",
+    "start": "node auth/app.js",
     "dev": "npx nodemon auth/app.js"
   },
   "author": "Asher",
