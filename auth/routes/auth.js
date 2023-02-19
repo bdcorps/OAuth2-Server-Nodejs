@@ -30,19 +30,6 @@ router.post('/authorize', async (req, res, next) => {
   DebugControl.log.flow('Initial User Authentication')
   const { email, password } = req.body;
 
-  const user = await prisma.user.findMany({
-    where: {
-      email,
-      password
-    }
-  })
-
-  if (user && user.length > 0) {
-    req.body.user = { user: user[0].id }
-    return next()
-  }
-
-
   const params = [ // Send params back down
     'client_id',
     'redirect_uri',
@@ -52,6 +39,25 @@ router.post('/authorize', async (req, res, next) => {
   ]
     .map(a => `${a}=${req.body[a]}`)
     .join('&')
+
+  if (!email || !password) {
+    return res.redirect(`/oauth?success=false&${params}`)
+  }
+
+  const user = await prisma.user.findMany({
+    where: {
+      email,
+      password
+    }
+  })
+
+  console.log("founduser", user)
+
+  if (user && user.length > 0) {
+    req.body.user = { user: user[0].id }
+    return next()
+  }
+
   return res.redirect(`/oauth?success=false&${params}`)
 }, (req, res, next) => { // sends us to our redirect with an authorization code in our url
   DebugControl.log.flow('Authorization')

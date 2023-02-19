@@ -63,7 +63,7 @@ module.exports = {
         accessTokenExpiresAt: token.accessTokenExpiresAt,
         refreshToken: token.accessToken, // NOTE this is only needed if you need refresh tokens down the line
         refreshTokenExpiresAt: token.accessTokenExpiresAt,
-        clientId: client.clientId,
+        clientId: client.clientId, 
         userId: user.user,
       }
     })

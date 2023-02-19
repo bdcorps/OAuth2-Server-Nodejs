@@ -3,6 +3,7 @@ const express = require('express')
 const app = express()
 const port = 3030
 const bodyParser = require('body-parser')
+const cors = require('cors')
 const oauthServer = require('./oauth/server.js')
 
 const DebugControl = require('./utilities/debug.js')
@@ -12,6 +13,8 @@ app.use(bodyParser.urlencoded({ extended: false }))
 app.use(bodyParser.json())
 app.use(DebugControl.log.request())
 
+app.use(cors())
+
 app.use('/client', require('./routes/client.js')) // Client routes
 app.use('/oauth', require('./routes/auth.js')) // routes to access the auth stuff
 // Note that the next router uses middleware. That protects all routes within this middleware
@@ -20,6 +23,7 @@ app.use('/secure', (req, res, next) => {
   return next()
 }, oauthServer.authenticate(), require('./routes/secure.js')) // routes to access the protected stuff
 app.use('/', (req, res) => res.redirect('/client'))
+
 
 
 app.listen(port)
