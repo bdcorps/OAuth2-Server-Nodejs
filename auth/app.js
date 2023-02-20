@@ -13,7 +13,10 @@ app.use(bodyParser.urlencoded({ extended: false }))
 app.use(bodyParser.json())
 app.use(DebugControl.log.request())
 
-app.use(cors())
+app.use(cors({ origin: true }))
+
+// add cors to all routes
+
 
 app.use('/client', require('./routes/client.js')) // Client routes
 app.use('/oauth', require('./routes/auth.js')) // routes to access the auth stuff

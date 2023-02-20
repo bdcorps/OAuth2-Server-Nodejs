@@ -68,8 +68,6 @@ router.post('/authorize', async (req, res, next) => {
       DebugControl.log.functionName('Authenticate Handler')
       DebugControl.log.parameters(Object.keys(req.body).map(k => ({ name: k, value: req.body[k] })))
 
-      console.log("returning this", req.body.user)
-
       return req.body.user
     }
   }
